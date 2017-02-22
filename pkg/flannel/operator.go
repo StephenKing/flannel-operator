@@ -18,16 +18,15 @@ import (
 	"fmt"
 	"time"
 
-	// "github.com/StephenKing/flannel-operator/pkg/client/network/v1alpha1"
-
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"github.com/go-kit/kit/log"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/util/workqueue"
-	"k8s.io/client-go/rest"
-	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
-	"k8s.io/client-go/tools/cache"
-	"net/url"
+	"k8s.io/client-go/1.5/kubernetes"
+	"k8s.io/client-go/1.5/pkg/api"
+	"k8s.io/client-go/1.5/pkg/api/v1"
+	"k8s.io/client-go/1.5/pkg/api/unversioned"
+	"k8s.io/client-go/1.5/pkg/runtime"
+	"k8s.io/client-go/1.5/pkg/apis/extensions/v1beta1"
+	"k8s.io/client-go/1.5/pkg/watch"
+	"k8s.io/client-go/1.5/tools/cache"
+	"k8s.io/client-go/1.5/rest"
 )
 
 const (
@@ -37,94 +36,81 @@ const (
 // Operator manages the life cycle of the flannel deployments
 type Operator struct {
 	kclient *kubernetes.Clientset
-	logger log.Logger
 
 	flanInf cache.SharedIndexInformer
 	dsetInf cache.SharedIndexInformer
 	nodeInf cache.SharedIndexInformer
-
-	queue workqueue.RateLimitingInterface
-
-	host                   string
-}
-
-// Config defines configuration parameters for the Operator.
-type Config struct {
-	Host          string
-	KubeletObject string
-	TLSInsecure   bool
-	TLSConfig     rest.TLSClientConfig
 }
 
 // New creates a new controller
-func New(conf Config, logger log.Logger) (*Operator, error) {
-	cfg, err := NewClusterConfig(conf.Host, conf.TLSInsecure, &conf.TLSConfig)
-	if err != nil {
-		return nil, err
-	}
-	client, err := kubernetes.NewForConfig(cfg)
+func New(cfg *rest.Config) (*Operator, error) {
+	kclient, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
 		return nil, err
 	}
 
 	c := &Operator{
-		kclient:                client,
-		logger:                 logger,
-		queue:                  workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "flannel"),
-		host:                   conf.Host,
+		kclient: kclient,
 	}
 
 
+	// TODO not really sure if we need to watch for new DaemonSets.. we create one,
+	// that should go to all nodes automatically. But let's see.. we probably need
+	// such watch certainly for new FlannelNetwork creations to make sure that we
+	// have a FlannelClient running.
+	c.dsetInf = cache.NewSharedIndexInformer(
+		&cache.ListWatch{
+			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
+				return kclient.DaemonSets(api.NamespaceAll).List(options)
+			},
+			WatchFunc: func(options api.ListOptions) (watch.Interface, error) {
+				return kclient.DaemonSets(api.NamespaceAll).Watch(options)
+			},
+		},
+		&v1beta1.DaemonSet{}, resyncPeriod, cache.Indexers{},
+	)
+	c.dsetInf.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: c.handleAddDaemonSet,
+		DeleteFunc: c.handleDeleteDaemonSet,
+		UpdateFunc: c.handleUpdateDaemonSet,
+	})
+
 	c.createDaemonSet()
-
-	// TODO add event handler for CRUD operations, esp. one for the DaemonSet
-
-	//c.dsetInf = cache.NewSharedIndexInformer(
-	//	cache.NewListWatchFromClient(c.kclient.Apps().RESTClient(), "daemonsets", api.NamespaceAll, nil),
-	//	&v1beta1.StatefulSet{}, resyncPeriod, cache.Indexers{},
-	//)
-	//c.dsetInf.AddEventHandler(cache.ResourceEventHandlerFuncs{
-	//	AddFunc:    c.handleAddDaemonSet,
-	//	DeleteFunc: c.handleDeleteDaemonSet,
-	//	UpdateFunc: c.handleUpdateDaemonSet,
-	//})
-	//
-	//
-	//if kubeletSyncEnabled {
-	//	c.nodeInf = cache.NewSharedIndexInformer(
-	//		cache.NewListWatchFromClient(c.kclient.Core().RESTClient(), "nodes", api.NamespaceAll, nil),
-	//		&v1.Node{}, resyncPeriod, cache.Indexers{},
-	//	)
-	//	c.nodeInf.AddEventHandler(cache.ResourceEventHandlerFuncs{
-	//		AddFunc:    c.handleAddNode,
-	//		DeleteFunc: c.handleDeleteNode,
-	//		UpdateFunc: c.handleUpdateNode,
-	//	})
-	//}
-
 
 	return c, nil
 }
 
 func (c *Operator) createDaemonSet() error {
 	namespace := "default"
-	dsetClient := c.kclient.ExtensionsV1beta1Client.DaemonSets(namespace)
+	dsetClient := c.kclient.ExtensionsClient.DaemonSets(namespace)
 
-	daemonSet := &extensions.DaemonSet{
-		//TypeMeta: metav1.TypeMeta{
-	 	//	Kind:       "DaemonSet",
-		//	APIVersion: "extensions/v1beta1",
-		//},
-		// TypeMeta: metav1.TypeMeta{},
-		ObjectMeta: metav1.ObjectMeta{
+	daemonSet := &v1beta1.DaemonSet{
+		TypeMeta: unversioned.TypeMeta{
+	 		Kind:       "DaemonSet",
+			APIVersion: "extensions/v1beta1",
+		},
+		ObjectMeta: v1.ObjectMeta{
 			Namespace:   "default",
 			Name:        "flannel",
 		},
-		Spec: extensions.DaemonSetSpec{
-			// Template:
+		Spec: v1beta1.DaemonSetSpec{
+			Template: v1.PodTemplateSpec{
+				//MetaData: v1.ObjectMeta{
+				//	Name: "flannel"
+				//},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Name: "flannel-server",
+							Image: "giantswarm/flannel:latest",
+						},
+					},
+				},
+			},
 		},
 		// Status: extensions.DaemonSetStatus{},
 	}
+
 
 	if _, err := dsetClient.Create(daemonSet); err != nil {
 		return fmt.Errorf("create daemonset: %s", err)
@@ -133,157 +119,33 @@ func (c *Operator) createDaemonSet() error {
 }
 
 
-func NewClusterConfig(host string, tlsInsecure bool, tlsConfig *rest.TLSClientConfig) (*rest.Config, error) {
-	var cfg *rest.Config
-	var err error
-
-	if len(host) == 0 {
-		if cfg, err = rest.InClusterConfig(); err != nil {
-			return nil, err
-		}
-	} else {
-		cfg = &rest.Config{
-			Host: host,
-		}
-		hostURL, err := url.Parse(host)
-		if err != nil {
-			return nil, fmt.Errorf("error parsing host url %s : %v", host, err)
-		}
-		if hostURL.Scheme == "https" {
-			cfg.TLSClientConfig = *tlsConfig
-			cfg.Insecure = tlsInsecure
-		}
-	}
-	cfg.QPS = 100
-	cfg.Burst = 100
-
-	return cfg, nil
+func (c *Operator) handleAddDaemonSet(obj interface{}) {
+	// TODO
+	//if flanSet := c.flannelForDaemonSet(obj); flanSet != nil {
+	//	c.enqueue(flanSet)
+	//}
+}
+func (c *Operator) handleDeleteDaemonSet(obj interface{}) {
+	// TODO
+	//if flanSet := c.flannelForDaemonSet(obj); flanSet != nil {
+	//	c.enqueue(flanSet)
+	//}
 }
 
-//func (c *Operator) keyFunc(obj interface{}) (string, bool) {
-//	k, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
-//	if err != nil {
-//		c.logger.Log("msg", "creating key failed", "err", err)
-//		return k, false
-//	}
-//	return k, true
-//}
-//
-//// enqueue adds a key to the queue. If obj is a key already it gets added directly.
-//// Otherwise, the key is extracted via keyFunc.
-//func (c *Operator) enqueue(obj interface{}) {
-//	if obj == nil {
-//		return
-//	}
-//
-//	key, ok := obj.(string)
-//	if !ok {
-//		key, ok = c.keyFunc(obj)
-//		if !ok {
-//			return
-//		}
-//	}
-//
-//	c.queue.Add(key)
-//}
-//
-//func daemonSetKeytoFlannelKey(key string) string {
-//	keyParts := strings.Split(key, "/")
-//	return keyParts[0] + "/" + strings.TrimPrefix(keyParts[1], "flannel-")
-//}
-//
-//func flannelKeyToDaemonSetKey(key string) string {
-//	keyParts := strings.Split(key, "/")
-//	return keyParts[0] + "/flannel-" + keyParts[1]
-//}
-//
-//func (c *Operator) flannelForDaemonSet(dset interface{}) *v1alpha1.FlannelNetwork {
-//	key, ok := c.keyFunc(dset)
-//	if !ok {
-//		return nil
-//	}
-//
-//	flanKey := daemonSetKeytoFlannelKey(key)
-//	f, exists, err := c.flanInf.GetStore().GetByKey(flanKey)
-//	if err != nil {
-//		c.logger.Log("msg", "Flannel lookup failed", "err", err)
-//		return nil
-//	}
-//	if !exists {
-//		return nil
-//	}
-//	return f.(*v1alpha1.FlannelNetwork)
-//}
-//
-//func (c *Operator) handleAddDaemonSet(obj interface{}) {
-//	if flanSet := c.flannelForDaemonSet(obj); flanSet != nil {
-//		c.enqueue(flanSet)
-//	}
-//}
-//func (c *Operator) handleDeleteDaemonSet(obj interface{}) {
-//	if flanSet := c.flannelForDaemonSet(obj); flanSet != nil {
-//		c.enqueue(flanSet)
-//	}
-//}
-//
-//func (c *Operator) handleUpdateDaemonSet(oldo, curo interface{}) {
-//	old := oldo.(*extensions.DaemonSet)
-//	cur := oldo.(*extensions.DaemonSet)
-//
-//	c.logger.Log("msg", "update handler", "old", old.ResourceVersion, "cur", cur.ResourceVersion)
-//
-//	// Periodic resync may resend the deployment without changes in-between.
-//	// Also breaks loops created by updating the resource ourselves.
-//	if old.ResourceVersion == cur.ResourceVersion {
-//		return
-//	}
-//
-//	if flanSet := c.flannelForDaemonSet(cur); flanSet != nil {
-//		c.enqueue(flanSet)
-//	}
-//}
-
-//func (c *Operator) handleAddNode(obj interface{})         { c.syncNodeEndpoints() }
-//func (c *Operator) handleDeleteNode(obj interface{})      { c.syncNodeEndpoints() }
-//func (c *Operator) handleUpdateNode(old, cur interface{}) { c.syncNodeEndpoints() }
-//
-//func (c *Operator) syncNodeEndpoints() error {
-//
-//
-//	namespace := "default"
-//	dsetClient := c.kclient.ExtensionsV1beta1Client.DaemonSets(namespace)
-//
-//	// Ensure we have a DaemonSet running flannel-server deployed.
-//	obj, exists, err = c.dsetInf.GetIndexer().GetByKey(flannelKeyToDaemonSetKey(key))
-//
-//	daemonset := extensions.DaemonSet{
-//		// TypeMeta: metav1.TypeMeta{},
-//		ObjectMeta: metav1.ObjectMeta{Name: "foo"},
-//		Spec: extensions.DaemonSetSpec{},
-//		// Status: extensions.DaemonSetStatus{},
-//	}
-//
-//	if _, err := dsetClient.Create(daemonset); err != nil {
-//		return fmt.Errorf("create daemonset: %s", err)
-//	}
-//
-//	/*
-//	extensions.DaemonSet{
-//		ObjectMeta: metav1.ObjectMeta{
-//			Name:        "flannel-server"
-//		},
-//		//	//Labels:      map[string]string{
-//		//	//	"app:" "flannel-server",
-//		//	//}
-//		//	//Annotations: p.ObjectMeta.Annotations,
-//		//},
-//		Spec: extensions.DaemonSetSpec{
-//			Selector: &metav1.LabelSelector{
-//				MatchLabels: map[string]string{
-//					"foo": "bar"}
-//			}
-//		}
-//	}
-//	*/
-//
-//}
+func (c *Operator) handleUpdateDaemonSet(oldo, curo interface{}) {
+	// TODO
+	//old := oldo.(*extensions.DaemonSet)
+	//cur := oldo.(*extensions.DaemonSet)
+	//
+	//c.logger.Log("msg", "update handler", "old", old.ResourceVersion, "cur", cur.ResourceVersion)
+	//
+	//// Periodic resync may resend the deployment without changes in-between.
+	//// Also breaks loops created by updating the resource ourselves.
+	//if old.ResourceVersion == cur.ResourceVersion {
+	//	return
+	//}
+	//
+	//if flanSet := c.flannelForDaemonSet(cur); flanSet != nil {
+	//	c.enqueue(flanSet)
+	//}
+}
