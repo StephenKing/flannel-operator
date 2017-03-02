@@ -60,8 +60,15 @@ func New(cfg *rest.Config) (*Operator, error) {
 		return nil, err
 	}
 
+	fclient, err := v1alpha1.NewForConfig(cfg)
+	if err != nil {
+		log.Notice("Failed to get fclient: %v", err)
+		return nil, err
+	}
+
 	o := &Operator{
 		kclient: kclient,
+		fclient: fclient,
 	}
 
 	// Watch for new FlannelNetwork creations to make sure that we
