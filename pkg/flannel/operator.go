@@ -20,7 +20,7 @@ import (
 
 	"github.com/op/go-logging"
 
-	"github.com/StephenKing/flannel-operator/pkg/client/flannel/v1alpha1"
+	"github.com/StephenKing/flannel-operator/pkg/client/flannelnetwork/v1alpha1"
 
 	"k8s.io/client-go/1.5/kubernetes"
 	"k8s.io/client-go/1.5/pkg/api"
@@ -44,7 +44,7 @@ const (
 // Operator manages the life cycle of the flannel deployments
 type Operator struct {
 	kclient *kubernetes.Clientset
-	fclient *v1alpha1.FlannelV1alpha1Client
+	fclient *v1alpha1.FlannelNetworkV1alpha1Client
 
 	flanInf cache.SharedIndexInformer
 	nodeInf cache.SharedIndexInformer
@@ -69,13 +69,13 @@ func New(cfg *rest.Config) (*Operator, error) {
 	o.flanInf = cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
-				return o.fclient.Flannels(api.NamespaceAll).List(options)
+				return o.fclient.FlannelNetworks(api.NamespaceAll).List(options)
 			},
 			WatchFunc: func(options api.ListOptions) (watch.Interface, error) {
-				return o.fclient.Flannels(api.NamespaceAll).Watch(options)
+				return o.fclient.FlannelNetworks(api.NamespaceAll).Watch(options)
 			},
 		},
-		&v1alpha1.Flannel{}, resyncPeriod, cache.Indexers{},
+		&v1alpha1.FlannelNetwork{}, resyncPeriod, cache.Indexers{},
 	)
 	o.flanInf.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    o.handleAddFlannelNetwork,

@@ -7,26 +7,26 @@ import (
 )
 
 // Prometheus defines a Prometheus deployment.
-type Flannel struct {
-	unversioned.TypeMeta   `json:",inline"`
-	v1.ObjectMeta `json:"metadata,omitempty"`
-	Spec              FlannelSpec    `json:"spec"`
-	Status            *FlannelStatus `json:"status,omitempty"`
+type FlannelNetwork struct {
+	unversioned.TypeMeta         `json:",inline"`
+	v1.ObjectMeta                `json:"metadata,omitempty"`
+	Spec   FlannelNetworkSpec    `json:"spec"`
+	Status *FlannelNetworkStatus `json:"status,omitempty"`
 }
 
-type FlannelList struct {
+type FlannelNetworkList struct {
 	unversioned.TypeMeta `json:",inline"`
 	unversioned.ListMeta `json:"metadata,omitempty"`
 
-	Items []*Flannel `json:"items"`
+	Items []*FlannelNetwork `json:"items"`
 }
 
-type FlannelSpec struct {
+type FlannelNetworkSpec struct {
 	VNI string `json:"vni,omitempty"`
 	Cidr string `json:"cidr,omitempty"`
 }
 
-type FlannelStatus struct {
+type FlannelNetworkStatus struct {
 	// Represents whether any actions on the underlaying managed objects are
 	// being performed. Only delete actions will be performed.
 	Paused bool `json:"paused"`

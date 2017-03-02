@@ -26,30 +26,30 @@ var (
 
 const (
 	TPRFlannelKind = "Flanel"
-	TPRFlannelName = "flannels"
+	TPRFlannelName = "flannelnetworks"
 )
 
-type FlannelsGetter interface {
-	Flannels(namespace string) FlannelInterface
+type FlannelNetworksGetter interface {
+	Flannels(namespace string) FlannelNetworkInterface
 }
 
-type FlannelInterface interface {
-	Create(*Flannel) (*Flannel, error)
-	Get(name string) (*Flannel, error)
-	Update(*Flannel) (*Flannel, error)
+type FlannelNetworkInterface interface {
+	Create(*FlannelNetwork) (*FlannelNetwork, error)
+	Get(name string) (*FlannelNetwork, error)
+	Update(*FlannelNetwork) (*FlannelNetwork, error)
 	Delete(name string, options *v1.DeleteOptions)
 	List(opts api.ListOptions) (runtime.Object, error)
 	Watch(opts api.ListOptions) (watch.Interface, error)
 }
 
-type flannels struct {
+type flannelnetworks struct {
 	restClient *rest.RESTClient
 	client     *dynamic.ResourceClient
 	ns         string
 }
 
-func newFlannels(r *rest.RESTClient, c *dynamic.Client, namespace string) *flannels {
-	return &flannels{
+func newFlannelNetworks(r *rest.RESTClient, c *dynamic.Client, namespace string) *flannelnetworks {
+	return &flannelnetworks{
 		r,
 		c.Resource(
 			&unversioned.APIResource{
@@ -63,8 +63,8 @@ func newFlannels(r *rest.RESTClient, c *dynamic.Client, namespace string) *flann
 	}
 }
 
-func (f *flannels) Create(o *Flannel) (*Flannel, error) {
-	up, err := UnstructuredFromFlannel(o)
+func (f *flannelnetworks) Create(o *FlannelNetwork) (*FlannelNetwork, error) {
+	up, err := UnstructuredFromFlannelNetwork(o)
 	if err != nil {
 		return nil, err
 	}
@@ -74,19 +74,19 @@ func (f *flannels) Create(o *Flannel) (*Flannel, error) {
 		return nil, err
 	}
 
-	return FlannelFromUnstructured(up)
+	return FlannelNetworkFromUnstructured(up)
 }
 
-func (f *flannels) Get(name string) (*Flannel, error) {
+func (f *flannelnetworks) Get(name string) (*FlannelNetwork, error) {
 	obj, err := f.client.Get(name)
 	if err != nil {
 		return nil, err
 	}
-	return FlannelFromUnstructured(obj)
+	return FlannelNetworkFromUnstructured(obj)
 }
 
-func (f *flannels) Update(o *Flannel) (*Flannel, error) {
-	up, err := UnstructuredFromFlannel(o)
+func (f *flannelnetworks) Update(o *FlannelNetwork) (*FlannelNetwork, error) {
+	up, err := UnstructuredFromFlannelNetwork(o)
 	if err != nil {
 		return nil, err
 	}
@@ -96,56 +96,55 @@ func (f *flannels) Update(o *Flannel) (*Flannel, error) {
 		return nil, err
 	}
 
-	return FlannelFromUnstructured(up)
+	return FlannelNetworkFromUnstructured(up)
 }
 
 // TODO had to remove the return type "error" because of
-// pkg/client/flannel/v1alpha1/client.go:25: cannot use newFlannels(c.restClient, c.dynamicClient, namespace) (type *flannels) as type FlannelInterface in return argument:
-func (f *flannels) Delete(name string, options *v1.DeleteOptions) {
+// pkg/client/flannel/v1alpha1/client.go:25: cannot use newFlannelNetworks(c.restClient, c.dynamicClient, namespace) (type *flannelnetworks) as type FlannelNetworkInterface in return argument:
+func (f *flannelnetworks) Delete(name string, options *v1.DeleteOptions) {
 	if err := f.client.Delete(name, options); err != nil {
 		log.Error("Could not delete %v - %v", name, err)
 	}
-
 }
 
-func (f *flannels) List(opts api.ListOptions) (runtime.Object, error) {
+func (f *flannelnetworks) List(opts api.ListOptions) (runtime.Object, error) {
 	req := f.restClient.Get().
 		Namespace(f.ns).
-		Resource("flannels").
+		Resource("flannelnetworks").
 		FieldsSelectorParam(nil)
 
 	b, err := req.DoRaw()
 	if err != nil {
 		return nil, err
 	}
-	var flan FlannelList
+	var flan FlannelNetworkList
 	return &flan, json.Unmarshal(b, &flan)
 }
 
-func (f *flannels) Watch(opts api.ListOptions) (watch.Interface, error) {
+func (f *flannelnetworks) Watch(opts api.ListOptions) (watch.Interface, error) {
 	r, err := f.restClient.Get().
 		Prefix("watch").
 		Namespace(f.ns).
-		Resource("flannels").
+		Resource("flannelnetworks").
 	// VersionedParams(&options, v1.ParameterCodec).
 		FieldsSelectorParam(nil).
 		Stream()
 	if err != nil {
 		return nil, err
 	}
-	return watch.NewStreamWatcher(&flannelDecoder{
+	return watch.NewStreamWatcher(&flannelNetworkDecoder{
 		dec:   json.NewDecoder(r),
 		close: r.Close,
 	}), nil
 }
 
-// FlannelFromUnstructured unmarshals a Flannel object from dynamic client's unstructured
-func FlannelFromUnstructured(r *runtime.Unstructured) (*Flannel, error) {
+// FlannelNetworkFromUnstructured unmarshals a FlannelNetwork object from dynamic client's unstructured
+func FlannelNetworkFromUnstructured(r *runtime.Unstructured) (*FlannelNetwork, error) {
 	b, err := json.Marshal(r.Object)
 	if err != nil {
 		return nil, err
 	}
-	var f Flannel
+	var f FlannelNetwork
 	if err := json.Unmarshal(b, &f); err != nil {
 		return nil, err
 	}
@@ -154,8 +153,8 @@ func FlannelFromUnstructured(r *runtime.Unstructured) (*Flannel, error) {
 	return &f, nil
 }
 
-// UnstructuredFromFlannel marshals a Flannel object into dynamic client's unstructured
-func UnstructuredFromFlannel(f *Flannel) (*runtime.Unstructured, error) {
+// UnstructuredFromFlannelNetwork marshals a FlannelNetwork object into dynamic client's unstructured
+func UnstructuredFromFlannelNetwork(f *FlannelNetwork) (*runtime.Unstructured, error) {
 	f.TypeMeta.Kind = TPRFlannelKind
 	f.TypeMeta.APIVersion = TPRGroup + "/" + TPRVersion
 	b, err := json.Marshal(f)
@@ -169,19 +168,19 @@ func UnstructuredFromFlannel(f *Flannel) (*runtime.Unstructured, error) {
 	return &r, nil
 }
 
-type flannelDecoder struct {
+type flannelNetworkDecoder struct {
 	dec   *json.Decoder
 	close func() error
 }
 
-func (d *flannelDecoder) Close() {
+func (d *flannelNetworkDecoder) Close() {
 	d.close()
 }
 
-func (d *flannelDecoder) Decode() (action watch.EventType, object runtime.Object, err error) {
+func (d *flannelNetworkDecoder) Decode() (action watch.EventType, object runtime.Object, err error) {
 	var e struct {
 		Type   watch.EventType
-		Object Flannel
+		Object FlannelNetwork
 	}
 	if err := d.dec.Decode(&e); err != nil {
 		return watch.Error, nil, err
