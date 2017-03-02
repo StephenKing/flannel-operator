@@ -1,0 +1,17 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: flannel-operator
+  labels:
+    operator: flannel
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        operator: flannel
+    spec:
+      containers:
+        - name: flannel-operator
+          image: stephenking/flannel-operator:latest
+          imagePullPolicy: Always
