@@ -18,6 +18,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/op/go-logging"
+
+	"github.com/StephenKing/flannel-operator/pkg/client/flannel/v1alpha1"
+
 	"k8s.io/client-go/1.5/kubernetes"
 	"k8s.io/client-go/1.5/pkg/api"
 	"k8s.io/client-go/1.5/pkg/api/v1"
@@ -29,6 +33,10 @@ import (
 	"k8s.io/client-go/1.5/rest"
 )
 
+var (
+	log = logging.MustGetLogger("flannel-operator")
+)
+
 const (
 	resyncPeriod = 1 * time.Minute
 )
@@ -36,51 +44,66 @@ const (
 // Operator manages the life cycle of the flannel deployments
 type Operator struct {
 	kclient *kubernetes.Clientset
+	fclient *v1alpha1.FlannelV1alpha1Client
 
 	flanInf cache.SharedIndexInformer
-	dsetInf cache.SharedIndexInformer
 	nodeInf cache.SharedIndexInformer
 }
 
 // New creates a new controller
 func New(cfg *rest.Config) (*Operator, error) {
+	log.Notice("About to create new flannel operator")
+
 	kclient, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
+		log.Notice("Failed to get kclient: %v", err)
 		return nil, err
 	}
 
-	c := &Operator{
+	o := &Operator{
 		kclient: kclient,
 	}
 
-
-	// TODO not really sure if we need to watch for new DaemonSets.. we create one,
-	// that should go to all nodes automatically. But let's see.. we probably need
-	// such watch certainly for new FlannelNetwork creations to make sure that we
+	// Watch for new FlannelNetwork creations to make sure that we
 	// have a FlannelClient running.
-	c.dsetInf = cache.NewSharedIndexInformer(
+	o.flanInf = cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
-				return kclient.DaemonSets(api.NamespaceAll).List(options)
+				return o.fclient.Flannels(api.NamespaceAll).List(options)
 			},
 			WatchFunc: func(options api.ListOptions) (watch.Interface, error) {
-				return kclient.DaemonSets(api.NamespaceAll).Watch(options)
+				return o.fclient.Flannels(api.NamespaceAll).Watch(options)
 			},
 		},
-		&v1beta1.DaemonSet{}, resyncPeriod, cache.Indexers{},
+		&v1alpha1.Flannel{}, resyncPeriod, cache.Indexers{},
 	)
-	c.dsetInf.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: c.handleAddDaemonSet,
-		DeleteFunc: c.handleDeleteDaemonSet,
-		UpdateFunc: c.handleUpdateDaemonSet,
+	o.flanInf.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc:    o.handleAddFlannelNetwork,
+		DeleteFunc: o.handleDeleteFlannelNetwork,
+		// UpdateFunc: o.handleUpdateFlannelNetwork,
 	})
 
-	c.createDaemonSet()
+	log.Notice("Added Event handlers")
 
-	return c, nil
+	o.createDaemonSet()
+
+	log.Notice("Done with Operator.New")
+
+	return o, nil
+}
+
+func (c *Operator) Run(stopc <-chan struct{}) error {
+	log.Notice("Called Operator.Run")
+	go c.flanInf.Run(stopc)
+
+	<-stopc
+	log.Notice("Operator.Run received stop signal")
+	return nil
 }
 
 func (c *Operator) createDaemonSet() error {
+	log.Notice("Creating DaemonSet for flannel")
+
 	namespace := "default"
 	dsetClient := c.kclient.ExtensionsClient.DaemonSets(namespace)
 
@@ -115,24 +138,28 @@ func (c *Operator) createDaemonSet() error {
 	if _, err := dsetClient.Create(daemonSet); err != nil {
 		return fmt.Errorf("create daemonset: %s", err)
 	}
+
+	log.Notice("DaemonSet seems created")
 	return nil
 }
 
 
-func (c *Operator) handleAddDaemonSet(obj interface{}) {
+func (c *Operator) handleAddFlannelNetwork(obj interface{}) {
+	log.Warning("TODO: implement handleAddFlannelNetwork")
 	// TODO
 	//if flanSet := c.flannelForDaemonSet(obj); flanSet != nil {
 	//	c.enqueue(flanSet)
 	//}
 }
-func (c *Operator) handleDeleteDaemonSet(obj interface{}) {
+func (c *Operator) handleDeleteFlannelNetwork(obj interface{}) {
+	log.Warning("TODO: implement handleDeleteFlannelNetwork")
 	// TODO
 	//if flanSet := c.flannelForDaemonSet(obj); flanSet != nil {
 	//	c.enqueue(flanSet)
 	//}
 }
 
-func (c *Operator) handleUpdateDaemonSet(oldo, curo interface{}) {
+// func (c *Operator) handleUpdateFlannelNetwork(oldo, curo interface{}) {
 	// TODO
 	//old := oldo.(*extensions.DaemonSet)
 	//cur := oldo.(*extensions.DaemonSet)
@@ -148,4 +175,4 @@ func (c *Operator) handleUpdateDaemonSet(oldo, curo interface{}) {
 	//if flanSet := c.flannelForDaemonSet(cur); flanSet != nil {
 	//	c.enqueue(flanSet)
 	//}
-}
+// }
