@@ -41,6 +41,9 @@ var (
 
 const (
 	resyncPeriod = 1 * time.Minute
+	kubeSystemNamespace = "kube-system"
+	dsetFlannelName = "flannel-server"
+	dsetFlannelVersion = "v0.6.2"
 )
 
 // Operator manages the life cycle of the flannel deployments
@@ -105,19 +108,23 @@ func (c *Operator) Run(stopc <-chan struct{}) error {
 	log.Notice("Called Operator.Run")
 	go c.flanInf.Run(stopc)
 
+	defer c.Stop()
+
 	<-stopc
 	log.Notice("Operator.Run received stop signal")
+	return nil
+}
+
+func (c *Operator) Stop() error {
+	log.Notice("Shutting down operator")
+
 	return nil
 }
 
 func (c *Operator) createDaemonSet() error {
 	log.Notice("Creating DaemonSet for flannel-server")
 
-	namespace := "kube-system"
-	name := "flannel-server"
-	version := "v0.6.2"
-
-	dsetClient := c.kclient.ExtensionsClient.DaemonSets(namespace)
+	dsetClient := c.kclient.ExtensionsClient.DaemonSets(kubeSystemNamespace)
 
 	// this is based on Timo's gist
 	// https://gist.github.com/teemow/89dec8b5124123714f4036a76d7e74aa
@@ -127,11 +134,11 @@ func (c *Operator) createDaemonSet() error {
 			APIVersion: "extensions/v1beta1",
 		},
 		ObjectMeta: v1.ObjectMeta{
-			Namespace: namespace,
-			Name:      name,
+			Namespace: kubeSystemNamespace,
+			Name:      dsetFlannelName,
 			Labels: map[string]string{
-				"app":     name,
-				"version": version,
+				"app":     dsetFlannelName,
+				"version": dsetFlannelVersion,
 			},
 		},
 		Spec: v1beta1.DaemonSetSpec{
@@ -150,8 +157,8 @@ func (c *Operator) createDaemonSet() error {
 						"scheduler.alpha.kubernetes.io/tolerations":  "[{\"key\":\"CriticalAddonsOnly\", \"operator\":\"Exists\"}]",
 					},
 					Labels: map[string]string{
-						"app":   name,
-						version: version,
+						"app":     dsetFlannelName,
+						"version": dsetFlannelVersion,
 					},
 				},
 				Spec: v1.PodSpec{
@@ -160,7 +167,7 @@ func (c *Operator) createDaemonSet() error {
 						{
 							// Flannel running in server mode listens for connections on 8889
 							Name:  "flannel-server",
-							Image: "giantswarm/flannel:" + version,
+							Image: "giantswarm/flannel:" + dsetFlannelVersion,
 							Env: []v1.EnvVar{
 								{
 									Name: "HOST_PUBLIC_IP",
