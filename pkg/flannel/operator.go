@@ -28,9 +28,7 @@ import (
 	"k8s.io/client-go/1.5/pkg/api/unversioned"
 	"k8s.io/client-go/1.5/pkg/api/v1"
 	"k8s.io/client-go/1.5/pkg/apis/extensions/v1beta1"
-	"k8s.io/client-go/1.5/pkg/runtime"
 	"k8s.io/client-go/1.5/pkg/util/intstr"
-	"k8s.io/client-go/1.5/pkg/watch"
 	"k8s.io/client-go/1.5/rest"
 	"k8s.io/client-go/1.5/tools/cache"
 )
@@ -80,19 +78,15 @@ func New(cfg *rest.Config) (*Operator, error) {
 	// have a FlannelClient running.
 	o.flanInf = cache.NewSharedIndexInformer(
 		&cache.ListWatch{
-			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
-				return o.fclient.FlannelNetworks(api.NamespaceAll).List(options)
-			},
-			WatchFunc: func(options api.ListOptions) (watch.Interface, error) {
-				return o.fclient.FlannelNetworks(api.NamespaceAll).Watch(options)
-			},
+			ListFunc: o.fclient.FlannelNetworks(api.NamespaceAll).List,
+			WatchFunc: o.fclient.FlannelNetworks(api.NamespaceAll).Watch,
 		},
 		&v1alpha1.FlannelNetwork{}, resyncPeriod, cache.Indexers{},
 	)
 	o.flanInf.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    o.handleAddFlannelNetwork,
 		DeleteFunc: o.handleDeleteFlannelNetwork,
-		// UpdateFunc: o.handleUpdateFlannelNetwork,
+		UpdateFunc: o.handleUpdateFlannelNetwork,
 	})
 
 	log.Notice("Added Event handlers")
@@ -277,7 +271,9 @@ func (c *Operator) handleDeleteFlannelNetwork(obj interface{}) {
 	//}
 }
 
-// func (c *Operator) handleUpdateFlannelNetwork(oldo, curo interface{}) {
+func (c *Operator) handleUpdateFlannelNetwork(oldo, curo interface{}) {
+	log.Warning("TODO: implement handleUpdateFlannelNetwork")
+}
 // TODO
 //old := oldo.(*extensions.DaemonSet)
 //cur := oldo.(*extensions.DaemonSet)
