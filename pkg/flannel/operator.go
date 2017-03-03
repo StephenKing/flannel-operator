@@ -160,7 +160,7 @@ func (c *Operator) createDaemonSet() error {
 						{
 							// Flannel running in server mode listens for connections on 8889
 							Name:  "flannel-server",
-							Image: "giantswarm/flannel:latest",
+							Image: "giantswarm/flannel:" + version,
 							Env: []v1.EnvVar{
 								{
 									Name: "HOST_PUBLIC_IP",
