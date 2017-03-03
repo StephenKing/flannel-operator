@@ -118,6 +118,11 @@ func (c *Operator) Run(stopc <-chan struct{}) error {
 func (c *Operator) Stop() error {
 	log.Notice("Shutting down operator")
 
+	// we should remove the DaemonSet when we leave..
+	if err := c.deleteDaemonSet(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -247,6 +252,14 @@ func (c *Operator) createDaemonSet() error {
 
 	log.Notice("DaemonSet seems created")
 	return nil
+}
+
+func (c *Operator) deleteDaemonSet() error {
+	log.Notice("Deleting flannel-server DaemonSet")
+
+	dsetClient := c.kclient.ExtensionsClient.DaemonSets(kubeSystemNamespace)
+
+	return dsetClient.Delete(dsetFlannelName, &api.DeleteOptions{})
 }
 
 func (c *Operator) handleAddFlannelNetwork(obj interface{}) {
