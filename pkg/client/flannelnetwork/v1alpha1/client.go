@@ -33,6 +33,7 @@ func (c *FlannelNetworkV1alpha1Client) RESTClient() *rest.RESTClient {
 }
 
 func NewForConfig(c *rest.Config) (*FlannelNetworkV1alpha1Client, error) {
+	log.Notice("Creating new FlannelNetworkV1alpha1Client")
 	config := *c
 	setConfigDefaults(&config)
 	client, err := rest.RESTClientFor(&config)
@@ -45,10 +46,12 @@ func NewForConfig(c *rest.Config) (*FlannelNetworkV1alpha1Client, error) {
 		return nil, err
 	}
 
+	log.Notice("Finished creating FlannelNetworkV1alpha1Client")
 	return &FlannelNetworkV1alpha1Client{client, dynamicClient}, nil
 }
 
 func setConfigDefaults(config *rest.Config) {
+	log.Notice("Setting up REST default configs")
 	config.GroupVersion = &unversioned.GroupVersion{
 		Group:   TPRGroup,
 		Version: TPRVersion,
