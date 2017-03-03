@@ -1,20 +1,21 @@
 package v1alpha1
 
 import (
-	"k8s.io/client-go/1.5/rest"
 	"k8s.io/client-go/1.5/dynamic"
+	"k8s.io/client-go/1.5/pkg/api"
 	"k8s.io/client-go/1.5/pkg/api/unversioned"
 	"k8s.io/client-go/1.5/pkg/runtime"
 	"k8s.io/client-go/1.5/pkg/runtime/serializer"
-	"k8s.io/client-go/1.5/pkg/api"
+	"k8s.io/client-go/1.5/rest"
 )
+
 const (
 	TPRGroup   = "flannel.st-g.de"
 	TPRVersion = "v1alpha1"
 )
 
 type FlannelNetworkV1alpha1Interface interface {
-	RESTClient()  *rest.RESTClient
+	RESTClient() *rest.RESTClient
 	FlannelNetworksGetter
 }
 

@@ -8,10 +8,10 @@ import (
 
 // Prometheus defines a Prometheus deployment.
 type FlannelNetwork struct {
-	unversioned.TypeMeta         `json:",inline"`
-	v1.ObjectMeta                `json:"metadata,omitempty"`
-	Spec   FlannelNetworkSpec    `json:"spec"`
-	Status *FlannelNetworkStatus `json:"status,omitempty"`
+	unversioned.TypeMeta `json:",inline"`
+	v1.ObjectMeta        `json:"metadata,omitempty"`
+	Spec                 FlannelNetworkSpec    `json:"spec"`
+	Status               *FlannelNetworkStatus `json:"status,omitempty"`
 }
 
 type FlannelNetworkList struct {
@@ -22,7 +22,7 @@ type FlannelNetworkList struct {
 }
 
 type FlannelNetworkSpec struct {
-	VNI string `json:"vni,omitempty"`
+	VNI  string `json:"vni,omitempty"`
 	Cidr string `json:"cidr,omitempty"`
 }
 

@@ -24,15 +24,15 @@ import (
 
 	"k8s.io/client-go/1.5/kubernetes"
 	"k8s.io/client-go/1.5/pkg/api"
-	"k8s.io/client-go/1.5/pkg/api/v1"
-	"k8s.io/client-go/1.5/pkg/api/unversioned"
-	"k8s.io/client-go/1.5/pkg/runtime"
-	"k8s.io/client-go/1.5/pkg/apis/extensions/v1beta1"
-	"k8s.io/client-go/1.5/pkg/watch"
-	"k8s.io/client-go/1.5/tools/cache"
-	"k8s.io/client-go/1.5/rest"
 	"k8s.io/client-go/1.5/pkg/api/resource"
+	"k8s.io/client-go/1.5/pkg/api/unversioned"
+	"k8s.io/client-go/1.5/pkg/api/v1"
+	"k8s.io/client-go/1.5/pkg/apis/extensions/v1beta1"
+	"k8s.io/client-go/1.5/pkg/runtime"
 	"k8s.io/client-go/1.5/pkg/util/intstr"
+	"k8s.io/client-go/1.5/pkg/watch"
+	"k8s.io/client-go/1.5/rest"
+	"k8s.io/client-go/1.5/tools/cache"
 )
 
 var (
@@ -123,13 +123,13 @@ func (c *Operator) createDaemonSet() error {
 	// https://gist.github.com/teemow/89dec8b5124123714f4036a76d7e74aa
 	daemonSet := &v1beta1.DaemonSet{
 		TypeMeta: unversioned.TypeMeta{
-	 		Kind:       "DaemonSet",
+			Kind:       "DaemonSet",
 			APIVersion: "extensions/v1beta1",
 		},
 		ObjectMeta: v1.ObjectMeta{
-			Namespace:   namespace,
-			Name:        name,
-			Labels:      map[string]string{
+			Namespace: namespace,
+			Name:      name,
+			Labels: map[string]string{
 				"app":     name,
 				"version": version,
 			},
@@ -147,10 +147,10 @@ func (c *Operator) createDaemonSet() error {
 				ObjectMeta: v1.ObjectMeta{
 					Annotations: map[string]string{
 						"scheduler.alpha.kubernetes.io/critical-pod": "",
-						"scheduler.alpha.kubernetes.io/tolerations": "[{\"key\":\"CriticalAddonsOnly\", \"operator\":\"Exists\"}]",
+						"scheduler.alpha.kubernetes.io/tolerations":  "[{\"key\":\"CriticalAddonsOnly\", \"operator\":\"Exists\"}]",
 					},
 					Labels: map[string]string{
-						"app": name,
+						"app":   name,
 						version: version,
 					},
 				},
@@ -159,7 +159,7 @@ func (c *Operator) createDaemonSet() error {
 					Containers: []v1.Container{
 						{
 							// Flannel running in server mode listens for connections on 8889
-							Name: "flannel-server",
+							Name:  "flannel-server",
 							Image: "giantswarm/flannel:latest",
 							Env: []v1.EnvVar{
 								{
@@ -178,7 +178,7 @@ func (c *Operator) createDaemonSet() error {
 							},
 							Ports: []v1.ContainerPort{
 								{
-									HostPort: 8889,
+									HostPort:      8889,
 									ContainerPort: 8889,
 								},
 							},
@@ -191,11 +191,11 @@ func (c *Operator) createDaemonSet() error {
 							},
 							VolumeMounts: []v1.VolumeMount{
 								{
-									Name: "varlogflannel",
+									Name:      "varlogflannel",
 									MountPath: "/var/log",
 								},
 								{
-									Name: "varrunflannel",
+									Name:      "varrunflannel",
 									MountPath: "/var/run/flannel",
 								},
 							},
@@ -208,7 +208,7 @@ func (c *Operator) createDaemonSet() error {
 									},
 								},
 								InitialDelaySeconds: 30,
-								TimeoutSeconds: 5,
+								TimeoutSeconds:      5,
 							},
 						},
 					},
@@ -234,7 +234,6 @@ func (c *Operator) createDaemonSet() error {
 		},
 	}
 
-
 	if _, err := dsetClient.Create(daemonSet); err != nil {
 		return fmt.Errorf("create daemonset: %s", err)
 	}
@@ -242,7 +241,6 @@ func (c *Operator) createDaemonSet() error {
 	log.Notice("DaemonSet seems created")
 	return nil
 }
-
 
 func (c *Operator) handleAddFlannelNetwork(obj interface{}) {
 	log.Warning("TODO: implement handleAddFlannelNetwork")
@@ -260,19 +258,19 @@ func (c *Operator) handleDeleteFlannelNetwork(obj interface{}) {
 }
 
 // func (c *Operator) handleUpdateFlannelNetwork(oldo, curo interface{}) {
-	// TODO
-	//old := oldo.(*extensions.DaemonSet)
-	//cur := oldo.(*extensions.DaemonSet)
-	//
-	//c.logger.Log("msg", "update handler", "old", old.ResourceVersion, "cur", cur.ResourceVersion)
-	//
-	//// Periodic resync may resend the deployment without changes in-between.
-	//// Also breaks loops created by updating the resource ourselves.
-	//if old.ResourceVersion == cur.ResourceVersion {
-	//	return
-	//}
-	//
-	//if flanSet := c.flannelForDaemonSet(cur); flanSet != nil {
-	//	c.enqueue(flanSet)
-	//}
+// TODO
+//old := oldo.(*extensions.DaemonSet)
+//cur := oldo.(*extensions.DaemonSet)
+//
+//c.logger.Log("msg", "update handler", "old", old.ResourceVersion, "cur", cur.ResourceVersion)
+//
+//// Periodic resync may resend the deployment without changes in-between.
+//// Also breaks loops created by updating the resource ourselves.
+//if old.ResourceVersion == cur.ResourceVersion {
+//	return
+//}
+//
+//if flanSet := c.flannelForDaemonSet(cur); flanSet != nil {
+//	c.enqueue(flanSet)
+//}
 // }

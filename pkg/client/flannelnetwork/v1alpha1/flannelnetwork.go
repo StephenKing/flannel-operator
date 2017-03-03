@@ -142,7 +142,7 @@ func (f *flannelnetworks) Watch(opts api.ListOptions) (watch.Interface, error) {
 		Prefix("watch").
 		Namespace(f.ns).
 		Resource("flannelnetworks").
-	// VersionedParams(&options, v1.ParameterCodec).
+		// VersionedParams(&options, v1.ParameterCodec).
 		FieldsSelectorParam(nil).
 		Stream()
 	if err != nil {
