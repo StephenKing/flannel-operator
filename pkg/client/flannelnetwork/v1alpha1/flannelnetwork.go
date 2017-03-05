@@ -66,7 +66,8 @@ func newFlannelNetworks(r *rest.RESTClient, c *dynamic.Client, namespace string)
 }
 
 func (f *flannelnetworks) Create(o *FlannelNetwork) (*FlannelNetwork, error) {
-	log.Notice("*flannelnetworks.Create")
+
+	log.Notice("Creating FlannelNetwork", o.Name)
 
 	up, err := UnstructuredFromFlannelNetwork(o)
 	if err != nil {
@@ -82,7 +83,6 @@ func (f *flannelnetworks) Create(o *FlannelNetwork) (*FlannelNetwork, error) {
 }
 
 func (f *flannelnetworks) Get(name string) (*FlannelNetwork, error) {
-	log.Notice("*flannelnetworks.Get")
 
 	obj, err := f.client.Get(name)
 	if err != nil {
@@ -92,7 +92,6 @@ func (f *flannelnetworks) Get(name string) (*FlannelNetwork, error) {
 }
 
 func (f *flannelnetworks) Update(o *FlannelNetwork) (*FlannelNetwork, error) {
-	log.Notice("*flannelnetworks.Create")
 
 	up, err := UnstructuredFromFlannelNetwork(o)
 	if err != nil {
@@ -110,7 +109,8 @@ func (f *flannelnetworks) Update(o *FlannelNetwork) (*FlannelNetwork, error) {
 // TODO had to remove the return type "error" because of
 // pkg/client/flannel/v1alpha1/client.go:25: cannot use newFlannelNetworks(c.restClient, c.dynamicClient, namespace) (type *flannelnetworks) as type FlannelNetworkInterface in return argument:
 func (f *flannelnetworks) Delete(name string, options *v1.DeleteOptions) {
-	log.Notice("*flannelnetworks.Delete")
+
+	log.Notice("Deleting FlannelNetwork", name)
 
 	if err := f.client.Delete(name, options); err != nil {
 		log.Error("Could not delete %v - %v", name, err)
@@ -118,7 +118,6 @@ func (f *flannelnetworks) Delete(name string, options *v1.DeleteOptions) {
 }
 
 func (f *flannelnetworks) List(opts api.ListOptions) (runtime.Object, error) {
-	log.Notice("*flannelnetworks.List")
 
 	req := f.restClient.Get().
 		Namespace(f.ns).
@@ -127,7 +126,7 @@ func (f *flannelnetworks) List(opts api.ListOptions) (runtime.Object, error) {
 
 	b, err := req.DoRaw()
 	if err != nil {
-		log.Notice("*flannelnetworks.List did not work out:", err)
+		log.Notice("flannelnetworks.List did not work out:", err)
 		return nil, err
 	}
 	var flan FlannelNetworkList
@@ -136,7 +135,7 @@ func (f *flannelnetworks) List(opts api.ListOptions) (runtime.Object, error) {
 }
 
 func (f *flannelnetworks) Watch(opts api.ListOptions) (watch.Interface, error) {
-	log.Notice("*flannelnetworks.Watch")
+	log.Notice("flannelnetworks.Watch")
 
 	r, err := f.restClient.Get().
 		Prefix("watch").

@@ -24,6 +24,7 @@ import (
 
 	"k8s.io/client-go/1.5/kubernetes"
 	"k8s.io/client-go/1.5/pkg/api"
+	"k8s.io/client-go/1.5/pkg/api/errors"
 	"k8s.io/client-go/1.5/pkg/api/resource"
 	"k8s.io/client-go/1.5/pkg/api/unversioned"
 	"k8s.io/client-go/1.5/pkg/api/v1"
@@ -42,6 +43,7 @@ const (
 	kubeSystemNamespace = "kube-system"
 	dsetFlannelName = "flannel-server"
 	dsetFlannelVersion = "v0.6.2"
+	tprFlannelNetwork = "flannel-network." + v1alpha1.TPRGroup
 )
 
 // Operator manages the life cycle of the flannel deployments
@@ -103,6 +105,10 @@ func (c *Operator) Run(stopc <-chan struct{}) error {
 	go c.flanInf.Run(stopc)
 
 	defer c.Stop()
+
+	if err := c.createTPRs(); err != nil {
+		log.Warning("Create TPRs failed:", err)
+	}
 
 	<-stopc
 	log.Notice("Operator.Run received stop signal")
@@ -244,21 +250,44 @@ func (c *Operator) createDaemonSet() error {
 		return fmt.Errorf("create daemonset: %s", err)
 	}
 
-	log.Notice("DaemonSet seems created")
+	log.Notice("DaemonSet created")
 	return nil
 }
 
 func (c *Operator) deleteDaemonSet() error {
-	log.Notice("Deleting flannel-server DaemonSet")
+	log.Notice("Deleting DaemonSet", dsetFlannelName)
 
 	dsetClient := c.kclient.ExtensionsClient.DaemonSets(kubeSystemNamespace)
 
 	return dsetClient.Delete(dsetFlannelName, &api.DeleteOptions{})
 }
 
+func (c *Operator) createTPRs() error {
+
+	tpr := &v1beta1.ThirdPartyResource{
+		ObjectMeta: v1.ObjectMeta{
+			Name: tprFlannelNetwork,
+			// TODO some labels could help?
+			// Labels:
+		},
+		Versions: []v1beta1.APIVersion{
+			{Name: v1alpha1.TPRVersion},
+		},
+		Description: "Flannel-based container network connectivity",
+	}
+
+	tprClient := c.kclient.ExtensionsClient.ThirdPartyResources()
+
+	if _, err := tprClient.Create(tpr); err != nil && !errors.IsAlreadyExists(err) {
+		return err
+	}
+	log.Notice("TPR created:", tpr.Name)
+	return nil
+}
+
 func (c *Operator) handleAddFlannelNetwork(obj interface{}) {
-	log.Warning("TODO: implement handleAddFlannelNetwork")
-	// TODO
+	// Prometheus:
+
 	//if flanSet := c.flannelForDaemonSet(obj); flanSet != nil {
 	//	c.enqueue(flanSet)
 	//}
