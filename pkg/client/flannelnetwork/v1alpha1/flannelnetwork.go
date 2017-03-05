@@ -127,7 +127,7 @@ func (f *flannelnetworks) List(opts api.ListOptions) (runtime.Object, error) {
 
 	b, err := req.DoRaw()
 	if err != nil {
-		log.Notice("*flannelnetworks.List did not work out: %v", err)
+		log.Notice("*flannelnetworks.List did not work out:", err)
 		return nil, err
 	}
 	var flan FlannelNetworkList
