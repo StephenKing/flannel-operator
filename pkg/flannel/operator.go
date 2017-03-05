@@ -88,7 +88,7 @@ func New(cfg *rest.Config) (*Operator, error) {
 	o.flanInf.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    o.handleAddFlannelNetwork,
 		DeleteFunc: o.handleDeleteFlannelNetwork,
-		UpdateFunc: o.handleUpdateFlannelNetwork,
+		//UpdateFunc: o.handleUpdateFlannelNetwork,
 	})
 
 	log.Notice("Added Event handlers")
@@ -120,8 +120,18 @@ func (c *Operator) Stop() error {
 
 	// we should remove the DaemonSet when we leave..
 	if err := c.deleteDaemonSet(); err != nil {
-		return err
+		log.Error("Deleting DaemonSet failed:", err)
 	}
+
+	if err := c.deleteTPRs(); err != nil {
+		log.Error("Deleting TPR failed:", err)
+	}
+
+	// TODO or should we leave all things in place?
+
+	log.Notice("TODO: Delete all FlannelNetworks")
+	log.Notice("TODO: Delete all flannel-client deployments")
+	log.Notice("TODO: Delete all flannel-server pods (not sure why the DS does not remove them.")
 
 	return nil
 }
@@ -258,8 +268,12 @@ func (c *Operator) deleteDaemonSet() error {
 	log.Notice("Deleting DaemonSet", dsetFlannelName)
 
 	dsetClient := c.kclient.ExtensionsClient.DaemonSets(kubeSystemNamespace)
+	// remove all the pods, not only the DaemonSet
+	deleteOptions := &api.DeleteOptions{
+		OrphanDependents: &true,
+	}
 
-	return dsetClient.Delete(dsetFlannelName, &api.DeleteOptions{})
+	return dsetClient.Delete(dsetFlannelName, deleteOptions)
 }
 
 func (c *Operator) createTPRs() error {
@@ -285,37 +299,139 @@ func (c *Operator) createTPRs() error {
 	return nil
 }
 
+func (c *Operator) deleteTPRs() error {
+	log.Notice("Deleting TPR", tprFlannelNetwork)
+
+	tprClient := c.kclient.ExtensionsClient.ThirdPartyResources()
+
+	return tprClient.Delete(tprFlannelNetwork, &api.DeleteOptions{})
+}
+
 func (c *Operator) handleAddFlannelNetwork(obj interface{}) {
 	// Prometheus:
 
 	//if flanSet := c.flannelForDaemonSet(obj); flanSet != nil {
 	//	c.enqueue(flanSet)
 	//}
-}
-func (c *Operator) handleDeleteFlannelNetwork(obj interface{}) {
-	log.Warning("TODO: implement handleDeleteFlannelNetwork")
-	// TODO
-	//if flanSet := c.flannelForDaemonSet(obj); flanSet != nil {
-	//	c.enqueue(flanSet)
+
+	// Pingdom:
+	//ing := obj.(*v1beta1.Ingress)
+	//hosts := getIngressHosts(ing)
+	//
+	//if len(hosts) > 0 {
+	//	o.createChecks(ing, hosts)
 	//}
+
+	flan := obj.(*v1alpha1.FlannelNetwork)
+	vni := flan.Spec.VNI
+	cidr := flan.Spec.Cidr
+
+	log.Notice("FlannelNetwork added (ns", flan.Namespace, " | VNI", vni, "| CIDR", cidr, ")")
+	log.Notice("Creating deployment of new flannel client")
+
+	customer := "testcustomer"
+	var replicas int32 = 1
+	var privileged bool = true
+
+	depl := &v1beta1.Deployment{
+		ObjectMeta: v1.ObjectMeta{
+			Name: "flannel-client-" + flan.Namespace + "-" + flan.Name + "-vni" + vni,
+			Labels: map[string]string{
+				"app": "flannel-client",
+				// TODO
+				"role": customer,
+			},
+			Namespace: kubeSystemNamespace,
+		},
+		Spec: v1beta1.DeploymentSpec{
+			Strategy: v1beta1.DeploymentStrategy{
+				Type: "Recreate",
+			},
+			Replicas: &replicas,
+			Template: v1.PodTemplateSpec{
+				ObjectMeta: v1.ObjectMeta{
+					Name: clientDeploymentName(flan),
+					Labels: map[string]string{
+						"role": customer,
+					},
+					Annotations: map[string]string{
+						"seccomp.security.alpha.kubernetes.io/pod": "unconfined",
+					},
+				},
+				Spec: v1.PodSpec{
+					HostNetwork: true,
+					Volumes: []v1.Volume{
+						{
+							Name: "flannel",
+							VolumeSource: v1.VolumeSource{
+								HostPath: &v1.HostPathVolumeSource{
+									Path: "/run/flannel",
+								},
+							},
+						},
+					},
+					RestartPolicy: "Always",
+					Containers: []v1.Container{
+						{
+							Name: "k8s-flannel",
+							SecurityContext: &v1.SecurityContext{
+								Privileged: &privileged,
+							},
+							Image:           "giantswarm/flannel:v0.6.2",
+							ImagePullPolicy: "IfNotPresent",
+							Env: []v1.EnvVar{
+								{
+									Name: "NODE_IP",
+									ValueFrom: &v1.EnvVarSource{
+										FieldRef: &v1.ObjectFieldSelector{
+											FieldPath: "spec.nodeName",
+										},
+									},
+								},
+							},
+							Command: []string{
+								"/bin/sh",
+								"-c",
+								"/opt/bin/flanneld --remote=$NODE_IP:8889 --public-ip=$NODE_IP --iface=$NODE_IP --networks=" + vni + " -v=1",
+							},
+							VolumeMounts: []v1.VolumeMount{
+								{
+									Name:      "flannel",
+									MountPath: "/run/flannel",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	deplClient := c.kclient.Deployments(kubeSystemNamespace)
+	if _, err := deplClient.Create(depl); err != nil {
+		log.Error("Creating deployment failed:", err)
+	} else {
+		log.Notice("Deployment for flannel client created")
+	}
+
 }
 
-func (c *Operator) handleUpdateFlannelNetwork(oldo, curo interface{}) {
-	log.Warning("TODO: implement handleUpdateFlannelNetwork")
+
+func (c *Operator) handleDeleteFlannelNetwork(obj interface{}) {
+	flan := obj.(*v1alpha1.FlannelNetwork)
+	vni := flan.Spec.VNI
+	cidr := flan.Spec.Cidr
+
+	log.Notice("handleDeleteFlannelNetwork (VNI ", vni, ", CIDR", cidr, ")")
+	deplClient := c.kclient.Deployments(kubeSystemNamespace)
+
+	if err := deplClient.Delete(clientDeploymentName(flan), &api.DeleteOptions{}); err != nil {
+		log.Error("Deleting deployment flannel-client failed:", err)
+	} else {
+		log.Notice("Deleted deployment flannel-client")
+	}
 }
-// TODO
-//old := oldo.(*extensions.DaemonSet)
-//cur := oldo.(*extensions.DaemonSet)
-//
-//c.logger.Log("msg", "update handler", "old", old.ResourceVersion, "cur", cur.ResourceVersion)
-//
-//// Periodic resync may resend the deployment without changes in-between.
-//// Also breaks loops created by updating the resource ourselves.
-//if old.ResourceVersion == cur.ResourceVersion {
-//	return
-//}
-//
-//if flanSet := c.flannelForDaemonSet(cur); flanSet != nil {
-//	c.enqueue(flanSet)
-//}
-// }
+
+func clientDeploymentName(flan *v1alpha1.FlannelNetwork) string {
+	return "flannel-client-" + flan.Namespace + "-" + flan.Name + "-vni" + flan.Spec.VNI
+}
