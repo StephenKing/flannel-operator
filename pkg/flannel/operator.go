@@ -118,20 +118,14 @@ func (c *Operator) Run(stopc <-chan struct{}) error {
 func (c *Operator) Stop() error {
 	log.Notice("Shutting down operator")
 
-	// we should remove the DaemonSet when we leave..
-	if err := c.deleteDaemonSet(); err != nil {
-		log.Error("Deleting DaemonSet failed:", err)
-	}
 
 	if err := c.deleteTPRs(); err != nil {
 		log.Error("Deleting TPR failed:", err)
 	}
 
-	// TODO or should we leave all things in place?
-
-	log.Notice("TODO: Delete all FlannelNetworks")
-	log.Notice("TODO: Delete all flannel-client deployments")
-	log.Notice("TODO: Delete all flannel-server pods (not sure why the DS does not remove them.")
+	log.Notice("Leaving all FlannelNetworks in place")
+	log.Notice("Leaving flannel-client deployments in place")
+	log.Notice("Leaving flannel-server DaemonSets in place")
 
 	return nil
 }
@@ -269,8 +263,9 @@ func (c *Operator) deleteDaemonSet() error {
 
 	dsetClient := c.kclient.ExtensionsClient.DaemonSets(kubeSystemNamespace)
 	// remove all the pods, not only the DaemonSet
+	var orphan bool = true
 	deleteOptions := &api.DeleteOptions{
-		OrphanDependents: &true,
+		OrphanDependents: &orphan,
 	}
 
 	return dsetClient.Delete(dsetFlannelName, deleteOptions)
@@ -308,19 +303,6 @@ func (c *Operator) deleteTPRs() error {
 }
 
 func (c *Operator) handleAddFlannelNetwork(obj interface{}) {
-	// Prometheus:
-
-	//if flanSet := c.flannelForDaemonSet(obj); flanSet != nil {
-	//	c.enqueue(flanSet)
-	//}
-
-	// Pingdom:
-	//ing := obj.(*v1beta1.Ingress)
-	//hosts := getIngressHosts(ing)
-	//
-	//if len(hosts) > 0 {
-	//	o.createChecks(ing, hosts)
-	//}
 
 	flan := obj.(*v1alpha1.FlannelNetwork)
 	vni := flan.Spec.VNI
@@ -329,7 +311,6 @@ func (c *Operator) handleAddFlannelNetwork(obj interface{}) {
 	log.Notice("FlannelNetwork added (ns", flan.Namespace, " | VNI", vni, "| CIDR", cidr, ")")
 	log.Notice("Creating deployment of new flannel client")
 
-	customer := "testcustomer"
 	var replicas int32 = 1
 	var privileged bool = true
 
@@ -338,8 +319,7 @@ func (c *Operator) handleAddFlannelNetwork(obj interface{}) {
 			Name: "flannel-client-" + flan.Namespace + "-" + flan.Name + "-vni" + vni,
 			Labels: map[string]string{
 				"app": "flannel-client",
-				// TODO
-				"role": customer,
+				"vni": vni,
 			},
 			Namespace: kubeSystemNamespace,
 		},
@@ -352,7 +332,8 @@ func (c *Operator) handleAddFlannelNetwork(obj interface{}) {
 				ObjectMeta: v1.ObjectMeta{
 					Name: clientDeploymentName(flan),
 					Labels: map[string]string{
-						"role": customer,
+						"app": "flannel-client",
+						"vni": vni,
 					},
 					Annotations: map[string]string{
 						"seccomp.security.alpha.kubernetes.io/pod": "unconfined",
@@ -392,7 +373,8 @@ func (c *Operator) handleAddFlannelNetwork(obj interface{}) {
 							Command: []string{
 								"/bin/sh",
 								"-c",
-								"/opt/bin/flanneld --remote=$NODE_IP:8889 --public-ip=$NODE_IP --iface=$NODE_IP --networks=" + vni + " -v=1",
+								// "--networks
+								"/opt/bin/flanneld --remote=$NODE_IP:8889 --public-ip=$NODE_IP --iface=$NODE_IP --kube-subnet-mgr -v=1",
 							},
 							VolumeMounts: []v1.VolumeMount{
 								{
@@ -423,9 +405,15 @@ func (c *Operator) handleDeleteFlannelNetwork(obj interface{}) {
 	cidr := flan.Spec.Cidr
 
 	log.Notice("handleDeleteFlannelNetwork (VNI ", vni, ", CIDR", cidr, ")")
-	deplClient := c.kclient.Deployments(kubeSystemNamespace)
+	deploymentClient := c.kclient.Deployments(kubeSystemNamespace)
 
-	if err := deplClient.Delete(clientDeploymentName(flan), &api.DeleteOptions{}); err != nil {
+	// remove all the pods, not only the Deployment
+	var orphan bool = true
+	deleteOptions := &api.DeleteOptions{
+		OrphanDependents: &orphan,
+	}
+
+	if err := deploymentClient.Delete(clientDeploymentName(flan), deleteOptions); err != nil {
 		log.Error("Deleting deployment flannel-client failed:", err)
 	} else {
 		log.Notice("Deleted deployment flannel-client")
