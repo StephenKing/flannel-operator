@@ -13,5 +13,4 @@ spec:
     spec:
       containers:
         - name: flannel-operator
-          image: stephenking/flannel-operator:0.1.1
-          imagePullPolicy: Always
+          image: stephenking/flannel-operator:0.1.2
