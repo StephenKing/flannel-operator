@@ -373,8 +373,7 @@ func (c *Operator) handleAddFlannelNetwork(obj interface{}) {
 							Command: []string{
 								"/bin/sh",
 								"-c",
-								// "--networks
-								"/opt/bin/flanneld --remote=$NODE_IP:8889 --public-ip=$NODE_IP --iface=$NODE_IP --kube-subnet-mgr -v=1",
+								"/opt/bin/flanneld --remote=$NODE_IP:8889 --public-ip=$NODE_IP --iface=$NODE_IP --networks=1 -v=1",
 							},
 							VolumeMounts: []v1.VolumeMount{
 								{
