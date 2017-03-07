@@ -263,7 +263,7 @@ func (c *Operator) deleteDaemonSet() error {
 
 	dsetClient := c.kclient.ExtensionsClient.DaemonSets(kubeSystemNamespace)
 	// remove all the pods, not only the DaemonSet
-	var orphan bool = true
+	var orphan bool = false
 	deleteOptions := &api.DeleteOptions{
 		OrphanDependents: &orphan,
 	}
@@ -407,7 +407,7 @@ func (c *Operator) handleDeleteFlannelNetwork(obj interface{}) {
 	deploymentClient := c.kclient.Deployments(kubeSystemNamespace)
 
 	// remove all the pods, not only the Deployment
-	var orphan bool = true
+	var orphan bool = false
 	deleteOptions := &api.DeleteOptions{
 		OrphanDependents: &orphan,
 	}
