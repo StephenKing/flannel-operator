@@ -1,7 +1,7 @@
 apiVersion: "flannel.st-g.de/v1alpha1"
 kind: FlannelNetwork
 metadata:
-  name: foo
+  name: flannel-network-1
 spec:
   vni: "123"
   cidr: "24"
