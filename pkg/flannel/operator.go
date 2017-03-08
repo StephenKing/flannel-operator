@@ -118,12 +118,8 @@ func (c *Operator) Run(stopc <-chan struct{}) error {
 func (c *Operator) Stop() error {
 	log.Notice("Shutting down operator")
 
-
-	if err := c.deleteTPRs(); err != nil {
-		log.Error("Deleting TPR failed:", err)
-	}
-
 	log.Notice("Leaving all FlannelNetworks in place")
+	log.Notice("Leaving FlannelNetwork TPR in place")
 	log.Notice("Leaving flannel-client deployments in place")
 	log.Notice("Leaving flannel-server DaemonSets in place")
 
